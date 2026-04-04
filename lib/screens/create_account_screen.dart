@@ -5,6 +5,7 @@ import '../theme.dart';
 import '../widgets/buttons.dart';
 import '../widgets/inputs.dart';
 import 'app_entry_router.dart';
+import 'otp_verification_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});
@@ -112,6 +113,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         return;
       }
 
+      // If session is returned immediately (e.g. email confirmation disabled),
+      // go straight to the app.
       if (response.session != null) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -121,15 +124,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Account created successfully. Please confirm your email, then sign in.',
+      // Otherwise, navigate to OTP verification screen.
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OtpVerificationScreen(
+            email: emailController.text.trim(),
           ),
         ),
       );
-
-      Navigator.pop(context);
     } on AuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
