@@ -110,8 +110,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
         fileOptions: const FileOptions(upsert: true),
       );
 
-      final imageUrl =
-      _supabase.storage.from('food-images').getPublicUrl(storagePath);
+      final imageUrl = _supabase.storage
+          .from('food-images')
+          .getPublicUrl(storagePath)
+          .replaceFirst('.storage.supabase.co', '.supabase.co/storage');
 
       await _supabase.from('food_scans').insert({
         'user_id': user?.id,
@@ -189,14 +191,15 @@ class _ScannerScreenState extends State<ScannerScreen> {
               children: [
                 Row(
                   children: [
-                    IconButton(
-                      onPressed: _handleBack,
-                      icon: Icon(
-                        Icons.arrow_back,
-                        color: textColor,
-                        size: 30,
+                    if (!widget.hideBottomNav)
+                      IconButton(
+                        onPressed: _handleBack,
+                        icon: Icon(
+                          Icons.arrow_back,
+                          color: textColor,
+                          size: 30,
+                        ),
                       ),
-                    ),
                     Expanded(
                       child: Center(
                         child: Text(
@@ -209,7 +212,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 48),
+                    if (!widget.hideBottomNav)
+                      const SizedBox(width: 48),
                   ],
                 ),
                 const SizedBox(height: 20),

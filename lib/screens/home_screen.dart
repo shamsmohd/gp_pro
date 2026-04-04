@@ -14,11 +14,18 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<HealthData> _healthFuture;
+  late final Stream<AuthState> _authStream;
 
   @override
   void initState() {
     super.initState();
     _healthFuture = fetchLatestHealthData();
+    _authStream = Supabase.instance.client.auth.onAuthStateChange;
+    _authStream.listen((data) {
+      if (data.event == AuthChangeEvent.userUpdated && mounted) {
+        setState(() {});
+      }
+    });
   }
 
   String _getGreeting() {
@@ -51,7 +58,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final avatarUrl = metadata?['avatar_url'];
 
     if (avatarUrl is String && avatarUrl.trim().isNotEmpty) {
-      return avatarUrl.trim();
+      return avatarUrl.trim().replaceFirst(
+        '.storage.supabase.co',
+        '.supabase.co/storage',
+      );
     }
 
     return null;
@@ -264,17 +274,32 @@ class _HeaderSection extends StatelessWidget {
 
     return Row(
       children: [
-        CircleAvatar(
-          radius: 32,
-          backgroundColor: isDark ? const Color(0xFF1E1E22) : Colors.white,
-          backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
-          child: avatarUrl == null
-              ? Icon(
-            Icons.person,
-            size: 30,
-            color: isDark ? Colors.white70 : Colors.grey,
-          )
-              : null,
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isDark ? const Color(0xFF1E1E22) : Colors.white,
+          ),
+          child: ClipOval(
+            child: avatarUrl != null
+                ? Image.network(
+                    avatarUrl!,
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.person,
+                      size: 30,
+                      color: isDark ? Colors.white70 : Colors.grey,
+                    ),
+                  )
+                : Icon(
+                    Icons.person,
+                    size: 30,
+                    color: isDark ? Colors.white70 : Colors.grey,
+                  ),
+          ),
         ),
         const SizedBox(width: 14),
         Expanded(

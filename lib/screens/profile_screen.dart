@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:gp_pro/screens/settings_screen.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -56,14 +57,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     debugPrint('Load profile - avatarUrl from metadata: $avatarUrl');
 
+    String? fixedAvatarUrl;
+    if (avatarUrl is String && avatarUrl.trim().isNotEmpty) {
+      fixedAvatarUrl = avatarUrl.trim().replaceFirst(
+        '.storage.supabase.co',
+        '.supabase.co/storage',
+      );
+    }
+
     return ProfileData(
       fullName: fullName is String && fullName.trim().isNotEmpty
           ? fullName.trim()
           : _nameFromEmail(email),
       email: email ?? 'No email',
-      avatarUrl: avatarUrl is String && avatarUrl.trim().isNotEmpty
-          ? avatarUrl.trim()
-          : null,
+      avatarUrl: fixedAvatarUrl,
     );
   }
 
@@ -143,18 +150,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final user = _supabase.auth.currentUser;
       if (user == null) return null;
 
+      final session = _supabase.auth.currentSession;
+      if (session == null) return null;
+
       final extension = _getFileExtension(file.path);
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.$extension';
       final storagePath = '${user.id}/$fileName';
 
-      await _supabase.storage.from('profile-images').upload(
-        storagePath,
-        file,
-        fileOptions: const FileOptions(upsert: true),
+      final bytes = await file.readAsBytes();
+
+      final mimeType = switch (extension) {
+        'png' => 'image/png',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        _ => 'image/jpeg',
+      };
+
+      // Direct HTTP upload — bypasses SDK multipart handling which
+      // can fail on iOS due to NSURLSession differences.
+      final supabaseUrl = 'https://gmdosbaezuykmyuiidhk.supabase.co';
+      final uploadUrl = Uri.parse(
+        '$supabaseUrl/storage/v1/object/profile-images/$storagePath',
       );
 
-      return _supabase.storage.from('profile-images').getPublicUrl(storagePath);
+      final response = await http.post(
+        uploadUrl,
+        headers: {
+          'Authorization': 'Bearer ${session.accessToken}',
+          'Content-Type': mimeType,
+          'x-upsert': 'true',
+        },
+        body: bytes,
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint('Upload failed: ${response.statusCode} ${response.body}');
+        throw Exception('Upload failed (${response.statusCode})');
+      }
+
+      return '$supabaseUrl/storage/v1/object/public/profile-images/$storagePath';
     } catch (e) {
+      debugPrint('Upload error: $e');
       if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Image upload failed: $e')),
@@ -238,12 +274,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: selectedImagePath != null
                             ? Image.file(
                           File(selectedImagePath!),
+                          width: 110,
+                          height: 110,
                           fit: BoxFit.cover,
                         )
                             : (previewAvatarUrl != null &&
                             previewAvatarUrl!.trim().isNotEmpty)
                             ? Image.network(
                           previewAvatarUrl!,
+                          width: 110,
+                          height: 110,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => const Icon(
                             Icons.person,
@@ -493,14 +533,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       Row(
                         children: [
-                          IconButton(
-                            onPressed: _handleBack,
-                            icon: Icon(
-                              Icons.arrow_back,
-                              size: 30,
-                              color: textColor,
+                          if (!widget.hideBottomNav)
+                            IconButton(
+                              onPressed: _handleBack,
+                              icon: Icon(
+                                Icons.arrow_back,
+                                size: 30,
+                                color: textColor,
+                              ),
                             ),
-                          ),
                           Expanded(
                             child: Center(
                               child: Text(
@@ -513,7 +554,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 48),
+                          if (!widget.hideBottomNav)
+                            const SizedBox(width: 48),
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -587,6 +629,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         child: profile.avatarUrl != null
                                             ? Image.network(
                                           profile.avatarUrl!,
+                                          width: 130,
+                                          height: 130,
                                           fit: BoxFit.cover,
                                           errorBuilder: (_, __, ___) => Icon(
                                             Icons.person,

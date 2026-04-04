@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,20 +18,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
   int selectedTab = 0; // 0 = Daily, 1 = Weekly, 2 = Monthly
 
   late Future<Map<String, dynamic>?> _activityFuture;
-  late ExerciseVideo _dailyVideo;
+  ExerciseVideo? _dailyVideo;
 
   @override
   void initState() {
     super.initState();
-    _dailyVideo = _pickDailyVideo();
+    _initDailyVideo();
     _loadData();
   }
 
-  ExerciseVideo _pickDailyVideo() {
-    final now = DateTime.now();
-    final seed = now.year * 10000 + now.month * 100 + now.day;
-    final random = Random(seed);
-    return exerciseVideos[random.nextInt(exerciseVideos.length)];
+  Future<void> _initDailyVideo() async {
+    final videos = await loadExerciseVideos();
+    if (!mounted) return;
+    setState(() {
+      _dailyVideo = pickDailyVideo(videos);
+    });
   }
 
   void _loadData() {
@@ -160,31 +159,45 @@ class _ActivityScreenState extends State<ActivityScreen> {
     }
   }
 
+  static String _normalizeGoal(String raw) {
+    final lower = raw.toLowerCase().trim();
+    if (lower.contains('lose') || lower.contains('loss')) return 'lose_weight';
+    if (lower.contains('gain')) return 'gain_weight';
+    if (lower.contains('maintain')) return 'maintain_weight';
+    // Already in snake_case
+    if (lower == 'lose_weight' || lower == 'gain_weight' || lower == 'maintain_weight') {
+      return lower;
+    }
+    return 'maintain_weight';
+  }
+
   Map<String, dynamic> _profileMetrics(User? user) {
     final metadata = user?.userMetadata ?? const <String, dynamic>{};
 
     final gender = (metadata['gender'] ?? '').toString();
     final birthDateRaw = metadata['birth_date']?.toString();
-    final height = (metadata['height_cm'] as num?)?.toDouble();
-    final weight = (metadata['weight_kg'] as num?)?.toDouble();
+    final height = (metadata['height_cm'] as num?)?.toDouble() ?? 170;
+    final weight = (metadata['weight_kg'] as num?)?.toDouble() ?? 70;
     final exercisesPerDay = (metadata['exercise_per_day'] as num?)?.toInt() ?? 0;
-    final goal = (metadata['goal'] ?? 'maintain_weight').toString();
+    final goal = _normalizeGoal((metadata['goal'] ?? 'maintain_weight').toString());
     final sleepHours = (metadata['sleep_hours'] as num?)?.toDouble() ?? 8;
 
     NutritionPlan? plan;
-    if (gender.isNotEmpty && birthDateRaw != null && height != null && weight != null) {
+    if (gender.isNotEmpty && birthDateRaw != null) {
       try {
         final birthDate = DateTime.parse(birthDateRaw);
         final age = _calculateAge(birthDate);
-        plan = NutritionCalculator.calculate(
-          gender: gender,
-          age: age,
-          heightCm: height,
-          weightKg: weight,
-          exercisesPerDay: exercisesPerDay,
-          goal: goal,
-          sleepHours: sleepHours,
-        );
+        if (age > 0 && age < 120) {
+          plan = NutritionCalculator.calculate(
+            gender: gender,
+            age: age,
+            heightCm: height,
+            weightKg: weight,
+            exercisesPerDay: exercisesPerDay,
+            goal: goal,
+            sleepHours: sleepHours,
+          );
+        }
       } catch (_) {}
     }
 
@@ -535,7 +548,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                             borderRadius: BorderRadius.circular(24),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(isDark ? 0.14 : 0.04),
+                                color: Colors.black.withValues(alpha:isDark ? 0.14 : 0.04),
                                 blurRadius: 16,
                                 offset: const Offset(0, 8),
                               ),
@@ -654,13 +667,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _VideoCard(
-                        video: _dailyVideo,
-                        cardColor: cardColor,
-                        textColor: textColor,
-                        subTextColor: subTextColor,
-                        onTap: () => _openVideo(_dailyVideo),
-                      ),
+                      if (_dailyVideo != null)
+                        _VideoCard(
+                          video: _dailyVideo!,
+                          cardColor: cardColor,
+                          textColor: textColor,
+                          subTextColor: subTextColor,
+                          onTap: () => _openVideo(_dailyVideo!),
+                        ),
                     ],
                   ),
                 );
@@ -699,7 +713,7 @@ class _PeriodTab extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.16 : 0.04),
+              color: Colors.black.withValues(alpha:isDark ? 0.16 : 0.04),
               blurRadius: 12,
               offset: const Offset(0, 6),
             ),
@@ -782,7 +796,7 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF6F1FF),
+        color: isDark ? Colors.white.withValues(alpha:0.05) : const Color(0xFFF6F1FF),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -827,7 +841,7 @@ class _WideInfoChip extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF6F1FF),
+        color: isDark ? Colors.white.withValues(alpha:0.05) : const Color(0xFFF6F1FF),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -882,7 +896,7 @@ class _VideoCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.14 : 0.04),
+              color: Colors.black.withValues(alpha:isDark ? 0.14 : 0.04),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
@@ -915,7 +929,7 @@ class _VideoCard extends StatelessWidget {
                         width: 64,
                         height: 64,
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.5),
+                          color: Colors.black.withValues(alpha:0.5),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
