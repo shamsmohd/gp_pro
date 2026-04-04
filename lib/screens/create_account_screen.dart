@@ -214,15 +214,26 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               children: [
                 const SizedBox(height: 30),
                 Center(
-                  child: CircleAvatar(
-                    radius: 40,
-                    backgroundColor: Colors.white,
-                    backgroundImage: const AssetImage('assets/images/logo.png'),
-                    onBackgroundImageError: (_, __) {},
-                    child: const Icon(
-                      Icons.person,
-                      color: AppColors.primary,
-                      size: 36,
+                  child: Container(
+                    width: 86,
+                    height: 86,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.white,
+                      border: Border.all(color: const Color(0xFFE7E7E7)),
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.person,
+                          color: AppColors.primary,
+                          size: 36,
+                        ),
+                      ),
                     ),
                   ),
                 ),

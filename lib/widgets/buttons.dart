@@ -18,13 +18,19 @@ class PrimaryAuthButton extends StatelessWidget {
       width: double.infinity,
       height: 62,
       child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
         onPressed: onPressed,
         child: Text(
           text,
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: AppColors.white,
           ),
         ),
       ),
