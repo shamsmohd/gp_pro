@@ -89,7 +89,7 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   String? _validatePassword(String? value) {
-    final password = value?.trim() ?? '';
+    final password = value ?? '';
     if (password.isEmpty) return 'Please enter your password';
     if (password.length < 6) return 'Password must be at least 6 characters';
     return null;
@@ -137,7 +137,7 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       await Supabase.instance.client.auth.signInWithPassword(
         email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+        password: passwordController.text,
       );
     } on AuthException catch (e) {
       if (!mounted) return;
@@ -172,6 +172,15 @@ class _SignInScreenState extends State<SignInScreen> {
         scopes: 'openid email profile',
         authScreenLaunchMode: _googleLaunchMode(),
       );
+
+      // OAuth opens an external browser. If the user cancels and comes back,
+      // no auth event fires, so reset the loading state after a delay.
+      await Future.delayed(const Duration(seconds: 3));
+      if (mounted && !_navigated) {
+        setState(() {
+          isGoogleLoading = false;
+        });
+      }
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() {

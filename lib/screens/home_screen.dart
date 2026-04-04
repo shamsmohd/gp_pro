@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -14,14 +16,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<HealthData> _healthFuture;
-  late final Stream<AuthState> _authStream;
 
   @override
   void initState() {
     super.initState();
     _healthFuture = fetchLatestHealthData();
-    _authStream = Supabase.instance.client.auth.onAuthStateChange;
-    _authStream.listen((data) {
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.userUpdated && mounted) {
         setState(() {});
       }
@@ -30,18 +30,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning!';
-    if (hour < 17) return 'Good afternoon!';
-    return 'Good evening!';
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   }
 
-  String _getUserName() {
+  String _getUserFirstName() {
     final user = Supabase.instance.client.auth.currentUser;
     final metadata = user?.userMetadata;
     final fullName = metadata?['full_name'];
 
     if (fullName is String && fullName.trim().isNotEmpty) {
-      return fullName.trim();
+      return fullName.trim().split(' ').first;
     }
 
     final email = user?.email;
@@ -91,27 +91,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userName = _getUserName();
+    final userName = _getUserFirstName();
     final avatarUrl = _getAvatarUrl();
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    // Scale factor: 1.0 at 375px (iPhone SE), scales up/down proportionally
+    final scale = (screenWidth / 375).clamp(0.85, 1.3);
+    final hPad = max(14.0, 20.0 * scale);
+
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subTextColor = isDark ? Colors.white60 : const Color(0xFF6B7280);
 
     final backgroundGradient = isDark
-        ? const [
-      Color(0xFF1A1625),
-      Color(0xFF171320),
-      Color(0xFF120F18),
-    ]
-        : const [
-      Color(0xFFF6F4FA),
-      Color(0xFFF1EEFA),
-      Color(0xFFEDE7F6),
-    ];
+        ? const [Color(0xFF1A1625), Color(0xFF171320), Color(0xFF120F18)]
+        : const [Color(0xFFF6F4FA), Color(0xFFF1EEFA), Color(0xFFEDE7F6)];
 
-    final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
-    final subTextColor =
-        theme.textTheme.bodySmall?.color ?? const Color(0xFF6B7280);
+    final cardColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.white.withValues(alpha: 0.65);
+    final cardBorder = isDark
+        ? Colors.white.withValues(alpha: 0.06)
+        : Colors.white.withValues(alpha: 0.8);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -139,106 +141,297 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: EdgeInsets.fromLTRB(
-                    20,
-                    18,
-                    20,
+                    hPad,
+                    14 * scale,
+                    hPad,
                     widget.hideBottomNav ? 120 : 24,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _HeaderSection(
-                        greeting: _getGreeting(),
-                        userName: userName,
-                        avatarUrl: avatarUrl,
+                      // ---- Header ----
+                      Row(
+                        children: [
+                          Container(
+                            width: 48 * scale,
+                            height: 48 * scale,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isDark
+                                  ? const Color(0xFF1E1E22)
+                                  : Colors.white,
+                              border: Border.all(
+                                color: const Color(0xFF5E35B1)
+                                    .withValues(alpha: 0.3),
+                                width: 2,
+                              ),
+                            ),
+                            child: ClipOval(
+                              child: avatarUrl != null
+                                  ? Image.network(
+                                      avatarUrl,
+                                      width: 48 * scale,
+                                      height: 48 * scale,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Icon(
+                                        Icons.person,
+                                        size: 24 * scale,
+                                        color: isDark
+                                            ? Colors.white70
+                                            : Colors.grey,
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.person,
+                                      size: 24 * scale,
+                                      color:
+                                          isDark ? Colors.white70 : Colors.grey,
+                                    ),
+                            ),
+                          ),
+                          SizedBox(width: 12 * scale),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${_getGreeting()},',
+                                  style: TextStyle(
+                                    fontSize: 13 * scale,
+                                    color: subTextColor,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  userName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 20 * scale,
+                                    fontWeight: FontWeight.w800,
+                                    color: textColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _IconButton(
+                            icon: Icons.notifications_none_rounded,
+                            isDark: isDark,
+                            size: 44 * scale,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const NotificationsScreen(),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 28),
+                      SizedBox(height: 20 * scale),
+
+                      // ---- Summary banner ----
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(18 * scale),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF5E35B1), Color(0xFF40236F)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(22 * scale),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF5E35B1)
+                                  .withValues(alpha: 0.3),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Daily overview',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13 * scale,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 14 * scale),
+                            Row(
+                              children: [
+                                _SummaryPill(
+                                  icon: Icons.local_fire_department_rounded,
+                                  value: '${data.calories}',
+                                  unit: 'kcal',
+                                  scale: scale,
+                                ),
+                                SizedBox(width: 10 * scale),
+                                _SummaryPill(
+                                  icon: Icons.water_drop_rounded,
+                                  value:
+                                      data.hydration.toStringAsFixed(1),
+                                  unit: 'L',
+                                  scale: scale,
+                                ),
+                                SizedBox(width: 10 * scale),
+                                _SummaryPill(
+                                  icon: Icons.bedtime_rounded,
+                                  value: '${data.sleepHours}',
+                                  unit: 'hr',
+                                  scale: scale,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 24 * scale),
+
+                      // ---- Section: Vitals ----
                       Text(
-                        'Track your health,\nImprove your life',
+                        'Vitals',
                         style: TextStyle(
-                          fontSize: 34,
-                          height: 1.15,
+                          fontSize: 20 * scale,
                           fontWeight: FontWeight.w800,
                           color: textColor,
                         ),
                       ),
-                      const SizedBox(height: 28),
-                      if (snapshot.connectionState == ConnectionState.waiting &&
-                          !snapshot.hasData)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 40),
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else if (snapshot.hasError)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.08)
-                                : Colors.white.withValues(alpha: 0.85),
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Text(
-                            'Error loading health data:\n${snapshot.error}',
-                            style: const TextStyle(
-                              color: Colors.redAccent,
-                              fontSize: 14,
-                            ),
-                          ),
-                        )
-                      else
-                        GridView.count(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 18,
-                          mainAxisSpacing: 18,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          childAspectRatio: 0.78,
-                          children: [
-                            HealthCard(
-                              title: 'Heart rate',
-                              topRightLabel: 'BP',
-                              emoji: '❤️',
-                              subtitle: 'Track blood pressure\nand oxygen.',
+                      SizedBox(height: 12 * scale),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _VitalCard(
+                              icon: Icons.favorite_rounded,
+                              iconColor: const Color(0xFFE53935),
+                              title: 'Blood pressure',
                               value:
-                              '${data.bloodPressureSys} / ${data.bloodPressureDia} mmHg',
+                                  '${data.bloodPressureSys}/${data.bloodPressureDia}',
+                              unit: 'mmHg',
+                              cardColor: cardColor,
+                              cardBorder: cardBorder,
+                              isDark: isDark,
+                              scale: scale,
                             ),
-                            HealthCard(
+                          ),
+                          SizedBox(width: 12 * scale),
+                          Expanded(
+                            child: _VitalCard(
+                              icon: Icons.bloodtype_rounded,
+                              iconColor: const Color(0xFFD32F2F),
                               title: 'Blood sugar',
-                              topRightLabel: 'BS',
-                              emoji: '🩸',
-                              subtitle: 'Manage your blood\nsugar wisely',
-                              value: '${data.bloodSugar} mg/dl',
+                              value: '${data.bloodSugar}',
+                              unit: 'mg/dl',
+                              cardColor: cardColor,
+                              cardBorder: cardBorder,
+                              isDark: isDark,
+                              scale: scale,
                             ),
-                            HealthCard(
-                              title: 'Temp',
-                              emoji: '🌡️',
-                              subtitle: 'Check temperature\nlevels',
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 12 * scale),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _VitalCard(
+                              icon: Icons.thermostat_rounded,
+                              iconColor: const Color(0xFFFF9800),
+                              title: 'Temperature',
                               value:
-                              '${data.temperature.toStringAsFixed(1)} °C',
+                                  data.temperature.toStringAsFixed(1),
+                              unit: '°C',
+                              cardColor: cardColor,
+                              cardBorder: cardBorder,
+                              isDark: isDark,
+                              scale: scale,
                             ),
-                            HealthCard(
-                              title: 'Activity',
-                              emoji: '🏃',
-                              subtitle: 'Stay active and\nenergized',
-                              value: 'Calories: ${data.calories} kcal',
+                          ),
+                          SizedBox(width: 12 * scale),
+                          Expanded(
+                            child: _VitalCard(
+                              icon: Icons.local_fire_department_rounded,
+                              iconColor: const Color(0xFFFF5722),
+                              title: 'Calories',
+                              value: '${data.calories}',
+                              unit: 'kcal',
+                              cardColor: cardColor,
+                              cardBorder: cardBorder,
+                              isDark: isDark,
+                              scale: scale,
                             ),
-                            HealthCard(
-                              title: 'Hydration',
-                              emoji: '💧',
-                              subtitle: 'Keep your body\nhydrated',
-                              value: '${data.hydration.toStringAsFixed(1)} L',
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 24 * scale),
+
+                      // ---- Section: Wellness ----
+                      Text(
+                        'Wellness',
+                        style: TextStyle(
+                          fontSize: 20 * scale,
+                          fontWeight: FontWeight.w800,
+                          color: textColor,
+                        ),
+                      ),
+                      SizedBox(height: 12 * scale),
+                      _WellnessRow(
+                        icon: Icons.water_drop_rounded,
+                        iconColor: const Color(0xFF2196F3),
+                        title: 'Hydration',
+                        value:
+                            '${data.hydration.toStringAsFixed(1)} L',
+                        progress: (data.hydration / 3.0).clamp(0.0, 1.0),
+                        progressColor: const Color(0xFF2196F3),
+                        cardColor: cardColor,
+                        cardBorder: cardBorder,
+                        isDark: isDark,
+                        scale: scale,
+                      ),
+                      SizedBox(height: 10 * scale),
+                      _WellnessRow(
+                        icon: Icons.bedtime_rounded,
+                        iconColor: const Color(0xFF7C4DFF),
+                        title: 'Sleep',
+                        value: '${data.sleepHours} hours',
+                        progress: (data.sleepHours / 9.0).clamp(0.0, 1.0),
+                        progressColor: const Color(0xFF7C4DFF),
+                        cardColor: cardColor,
+                        cardBorder: cardBorder,
+                        isDark: isDark,
+                        scale: scale,
+                      ),
+
+                      // ---- Loading / Error states ----
+                      if (snapshot.connectionState ==
+                              ConnectionState.waiting &&
+                          !snapshot.hasData)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 40),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      if (snapshot.hasError)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 20),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(18),
                             ),
-                            HealthCard(
-                              title: 'Sleep',
-                              emoji: '😴',
-                              subtitle: 'Sleep well and\nrecover',
-                              value: '${data.sleepHours} Hr',
+                            child: const Text(
+                              'Could not load health data. Pull to refresh.',
+                              style: TextStyle(
+                                color: Colors.redAccent,
+                                fontSize: 14,
+                              ),
                             ),
-                          ],
+                          ),
                         ),
                     ],
                   ),
@@ -252,226 +445,202 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _HeaderSection extends StatelessWidget {
-  const _HeaderSection({
-    required this.greeting,
-    required this.userName,
-    required this.avatarUrl,
+// ---- Reusable widgets ----
+
+class _IconButton extends StatelessWidget {
+  const _IconButton({
+    required this.icon,
+    required this.isDark,
+    required this.size,
+    required this.onTap,
   });
 
-  final String greeting;
-  final String userName;
-  final String? avatarUrl;
+  final IconData icon;
+  final bool isDark;
+  final double size;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
-    final subTextColor =
-        theme.textTheme.bodySmall?.color ?? const Color(0xFF6B7280);
-
-    return Row(
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isDark ? const Color(0xFF1E1E22) : Colors.white,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.white.withValues(alpha: 0.8),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.white.withValues(alpha: 0.95),
           ),
-          child: ClipOval(
-            child: avatarUrl != null
-                ? Image.network(
-                    avatarUrl!,
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Icon(
-                      Icons.person,
-                      size: 30,
-                      color: isDark ? Colors.white70 : Colors.grey,
-                    ),
-                  )
-                : Icon(
-                    Icons.person,
-                    size: 30,
-                    color: isDark ? Colors.white70 : Colors.grey,
-                  ),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                greeting,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: subTextColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                userName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: textColor,
-                ),
-              ),
-            ],
-          ),
-        ),
-        GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const NotificationsScreen(),
-              ),
-            );
-          },
-          child: Container(
-            width: 62,
-            height: 62,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.10)
-                  : Colors.white.withValues(alpha: 0.78),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.white.withValues(alpha: 0.95),
-                width: 1.2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.06),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-            child: Center(
-              child: Icon(
-                Icons.notifications_none_rounded,
-                size: 30,
-                color: textColor,
-              ),
-            ),
-          ),
+          ],
         ),
-      ],
+        child: Icon(
+          icon,
+          size: size * 0.5,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
+      ),
     );
   }
 }
 
-class HealthCard extends StatelessWidget {
-  const HealthCard({
-    super.key,
-    required this.title,
+class _SummaryPill extends StatelessWidget {
+  const _SummaryPill({
+    required this.icon,
     required this.value,
-    required this.subtitle,
-    required this.emoji,
-    this.topRightLabel,
+    required this.unit,
+    required this.scale,
   });
 
-  final String title;
+  final IconData icon;
   final String value;
-  final String subtitle;
-  final String emoji;
-  final String? topRightLabel;
+  final String unit;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    return Expanded(
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          vertical: 12 * scale,
+          horizontal: 6,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(14 * scale),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: Colors.white, size: 20 * scale),
+            SizedBox(height: 6 * scale),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18 * scale,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Text(
+              unit,
+              style: TextStyle(
+                color: Colors.white60,
+                fontSize: 11 * scale,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-    final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
-    final subTextColor =
-        theme.textTheme.bodySmall?.color ?? const Color(0xFF6B7280);
+class _VitalCard extends StatelessWidget {
+  const _VitalCard({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.value,
+    required this.unit,
+    required this.cardColor,
+    required this.cardBorder,
+    required this.isDark,
+    required this.scale,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String value;
+  final String unit;
+  final Color cardColor;
+  final Color cardBorder;
+  final bool isDark;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subColor = isDark ? Colors.white54 : const Color(0xFF6B7280);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+      padding: EdgeInsets.all(14 * scale),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF1E1E22)
-            : Colors.white.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : Colors.white.withValues(alpha: 0.8),
-        ),
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20 * scale),
+        border: Border.all(color: cardBorder),
         boxShadow: [
           BoxShadow(
-            blurRadius: 18,
-            spreadRadius: 0,
-            offset: const Offset(0, 10),
-            color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
+          Container(
+            width: 38 * scale,
+            height: 38 * scale,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(11 * scale),
+            ),
+            child: Icon(icon, color: iconColor, size: 20 * scale),
+          ),
+          SizedBox(height: 10 * scale),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12 * scale,
+              fontWeight: FontWeight.w600,
+              color: subColor,
+            ),
+          ),
+          SizedBox(height: 2 * scale),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  value,
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 24 * scale,
                     fontWeight: FontWeight.w800,
                     color: textColor,
                   ),
                 ),
-              ),
-              if (topRightLabel != null)
+                SizedBox(width: 3 * scale),
                 Text(
-                  topRightLabel!,
+                  unit,
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: textColor,
+                    fontSize: 12 * scale,
+                    fontWeight: FontWeight.w500,
+                    color: subColor,
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Center(
-            child: Text(
-              emoji,
-              style: const TextStyle(fontSize: 52),
-            ),
-          ),
-          const SizedBox(height: 18),
-          Center(
-            child: Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                height: 1.35,
-                color: subTextColor,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-              color: textColor,
+              ],
             ),
           ),
         ],
@@ -479,6 +648,114 @@ class HealthCard extends StatelessWidget {
     );
   }
 }
+
+class _WellnessRow extends StatelessWidget {
+  const _WellnessRow({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.value,
+    required this.progress,
+    required this.progressColor,
+    required this.cardColor,
+    required this.cardBorder,
+    required this.isDark,
+    required this.scale,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String value;
+  final double progress;
+  final Color progressColor;
+  final Color cardColor;
+  final Color cardBorder;
+  final bool isDark;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.white : Colors.black;
+
+    return Container(
+      padding: EdgeInsets.all(14 * scale),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20 * scale),
+        border: Border.all(color: cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42 * scale,
+            height: 42 * scale,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12 * scale),
+            ),
+            child: Icon(icon, color: iconColor, size: 22 * scale),
+          ),
+          SizedBox(width: 12 * scale),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14 * scale,
+                          fontWeight: FontWeight.w700,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8 * scale),
+                    Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 14 * scale,
+                        fontWeight: FontWeight.w800,
+                        color: textColor,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8 * scale),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(5 * scale),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 7 * scale,
+                    backgroundColor: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.06),
+                    valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---- Data model (unchanged) ----
 
 class HealthData {
   final int bloodPressureSys;

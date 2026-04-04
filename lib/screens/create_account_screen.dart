@@ -53,16 +53,16 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   }
 
   String? _validatePassword(String? value) {
-    final password = value?.trim() ?? '';
+    final password = value ?? '';
     if (password.isEmpty) return 'Please enter your password';
     if (password.length < 6) return 'Password must be at least 6 characters';
     return null;
   }
 
   String? _validateConfirmPassword(String? value) {
-    final confirm = value?.trim() ?? '';
+    final confirm = value ?? '';
     if (confirm.isEmpty) return 'Please confirm your password';
-    if (confirm != passwordController.text.trim()) {
+    if (confirm != passwordController.text) {
       return 'Passwords do not match';
     }
     return null;
@@ -89,13 +89,28 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
       final response = await supabase.auth.signUp(
         email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+        password: passwordController.text,
         data: {
           'full_name': nameController.text.trim(),
         },
       );
 
       if (!mounted) return;
+
+      // Supabase returns a user with empty identities when the email is
+      // already registered (to avoid email enumeration). Detect this and
+      // show a helpful message instead of a false success.
+      final identities = response.user?.identities;
+      if (identities != null && identities.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'An account with this email already exists. Please sign in instead.',
+            ),
+          ),
+        );
+        return;
+      }
 
       if (response.session != null) {
         Navigator.pushAndRemoveUntil(
