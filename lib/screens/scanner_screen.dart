@@ -1,10 +1,19 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+// Food model API base URL. Replace with your Render URL once deployed,
+// e.g. 'https://food-model.onrender.com'. For local dev:
+//   - Android emulator: http://10.0.2.2:8000
+//   - iOS simulator:    http://127.0.0.1:8000
+//   - Physical device:  http://<your-mac-LAN-IP>:8000
+const String kFoodApiBaseUrl = 'https://ai-api-9005.onrender.com';
 
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({
@@ -28,6 +37,8 @@ class _ScannerScreenState extends State<ScannerScreen>
   File? _selectedImage;
   bool _isUploading = false;
   _UploadState _uploadState = _UploadState.idle;
+  List<_Detection> _detections = const [];
+  _Totals? _totals;
 
   late AnimationController _pulseController;
 
@@ -134,23 +145,23 @@ class _ScannerScreenState extends State<ScannerScreen>
       );
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception('Upload failed (${response.statusCode})');
+        throw Exception(
+          'Upload failed (${response.statusCode}): ${response.body}',
+        );
       }
 
-      final imageUrl =
-          '$supabaseUrl/storage/v1/object/public/food-images/$storagePath';
-
-      await _supabase.from('food_scans').insert({
-        'user_id': user?.id,
-        'image_path': storagePath,
-        'image_url': imageUrl,
-        'source': 'mobile_app',
-        'status': 'uploaded',
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      // Tell the model server to scan the image and persist the result
+      // to Supabase (insert into `food_scans`). The app does NOT write
+      // the scan row itself in Pattern A — the server owns that.
+      final scan = await _runScan(
+        userId: user?.id ?? 'guest',
+        storagePath: storagePath,
+      );
 
       if (!mounted) return;
       setState(() {
+        _detections = scan.detections;
+        _totals = scan.totals;
         _uploadState = _UploadState.success;
       });
     } catch (e) {
@@ -175,7 +186,37 @@ class _ScannerScreenState extends State<ScannerScreen>
     setState(() {
       _selectedImage = null;
       _uploadState = _UploadState.idle;
+      _detections = const [];
+      _totals = null;
     });
+  }
+
+  Future<_ScanResult> _runScan({
+    required String userId,
+    required String storagePath,
+  }) async {
+    final uri = Uri.parse('$kFoodApiBaseUrl/scan');
+    final res = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'user_id': userId,
+            'storage_path': storagePath,
+          }),
+        )
+        .timeout(const Duration(seconds: 180));
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('Scan failed (${res.statusCode}): ${res.body}');
+    }
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    final detections = (json['detections'] as List? ?? [])
+        .map((e) => _Detection.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final totals = _Totals.fromJson(
+      (json['totals'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+    return _ScanResult(detections: detections, totals: totals);
   }
 
   void _showSnack(String message) {
@@ -492,6 +533,17 @@ class _ScannerScreenState extends State<ScannerScreen>
                     cardBorder: cardBorder,
                     scale: scale,
                   ),
+                if (_uploadState == _UploadState.success && _totals != null) ...[
+                  SizedBox(height: 14 * scale),
+                  _ResultsCard(
+                    detections: _detections,
+                    totals: _totals!,
+                    isDark: isDark,
+                    cardColor: cardColor,
+                    cardBorder: cardBorder,
+                    scale: scale,
+                  ),
+                ],
               ],
             ),
           ),
@@ -504,6 +556,71 @@ class _ScannerScreenState extends State<ScannerScreen>
 // ---- Enums ----
 
 enum _UploadState { idle, uploading, success, error }
+
+// ---- Models ----
+
+@immutable
+class _Detection {
+  const _Detection({
+    required this.food,
+    required this.nameAr,
+    required this.confidence,
+    required this.calories,
+    required this.proteinG,
+    required this.carbsG,
+  });
+
+  final String food;
+  final String nameAr;
+  final double confidence;
+  final num calories;
+  final num proteinG;
+  final num carbsG;
+
+  factory _Detection.fromJson(Map<String, dynamic> j) => _Detection(
+        food: (j['food'] ?? '') as String,
+        nameAr: (j['name_ar'] ?? '') as String,
+        confidence: (j['confidence'] as num? ?? 0).toDouble(),
+        calories: (j['calories'] as num? ?? 0),
+        proteinG: (j['protein_g'] as num? ?? 0),
+        carbsG: (j['carbs_g'] as num? ?? 0),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'food': food,
+        'name_ar': nameAr,
+        'confidence': confidence,
+        'calories': calories,
+        'protein_g': proteinG,
+        'carbs_g': carbsG,
+      };
+}
+
+@immutable
+class _Totals {
+  const _Totals({
+    required this.calories,
+    required this.proteinG,
+    required this.carbsG,
+  });
+
+  final num calories;
+  final num proteinG;
+  final num carbsG;
+
+  factory _Totals.fromJson(Map<String, dynamic> j) => _Totals(
+        calories: (j['calories'] as num? ?? 0),
+        proteinG: (j['protein_g'] as num? ?? 0),
+        carbsG: (j['carbs_g'] as num? ?? 0),
+      );
+}
+
+@immutable
+class _ScanResult {
+  const _ScanResult({required this.detections, required this.totals});
+  final List<_Detection> detections;
+  final _Totals totals;
+}
 
 // ---- Widgets ----
 
@@ -679,6 +796,143 @@ class _StatusCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ResultsCard extends StatelessWidget {
+  const _ResultsCard({
+    required this.detections,
+    required this.totals,
+    required this.isDark,
+    required this.cardColor,
+    required this.cardBorder,
+    required this.scale,
+  });
+
+  final List<_Detection> detections;
+  final _Totals totals;
+  final bool isDark;
+  final Color cardColor;
+  final Color cardBorder;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subTextColor = isDark ? Colors.white60 : const Color(0xFF7B7B7B);
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16 * scale),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20 * scale),
+        border: Border.all(color: cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Detections',
+            style: TextStyle(
+              fontSize: 16 * scale,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+            ),
+          ),
+          SizedBox(height: 10 * scale),
+          if (detections.isEmpty)
+            Text(
+              'No food items detected.',
+              style: TextStyle(fontSize: 13 * scale, color: subTextColor),
+            )
+          else
+            ...detections.map(
+              (d) => Padding(
+                padding: EdgeInsets.symmetric(vertical: 6 * scale),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            d.nameAr.isNotEmpty ? '${d.food}  ·  ${d.nameAr}' : d.food,
+                            style: TextStyle(
+                              fontSize: 14 * scale,
+                              fontWeight: FontWeight.w700,
+                              color: textColor,
+                            ),
+                          ),
+                          SizedBox(height: 2 * scale),
+                          Text(
+                            '${d.calories} kcal · P ${d.proteinG}g · C ${d.carbsG}g',
+                            style: TextStyle(
+                              fontSize: 12 * scale,
+                              color: subTextColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '${d.confidence.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        fontSize: 13 * scale,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF5E35B1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          Divider(height: 24 * scale, color: cardBorder),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _TotalChip(label: 'Calories', value: '${totals.calories}', scale: scale, color: textColor, sub: subTextColor),
+              _TotalChip(label: 'Protein', value: '${totals.proteinG}g', scale: scale, color: textColor, sub: subTextColor),
+              _TotalChip(label: 'Carbs', value: '${totals.carbsG}g', scale: scale, color: textColor, sub: subTextColor),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TotalChip extends StatelessWidget {
+  const _TotalChip({
+    required this.label,
+    required this.value,
+    required this.scale,
+    required this.color,
+    required this.sub,
+  });
+
+  final String label;
+  final String value;
+  final double scale;
+  final Color color;
+  final Color sub;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(label, style: TextStyle(fontSize: 11 * scale, color: sub)),
+        SizedBox(height: 2 * scale),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 15 * scale,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }
