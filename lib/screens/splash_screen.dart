@@ -95,6 +95,7 @@ class _SplashScreenState extends State<SplashScreen>
                 scale: _scaleAnimation,
                 child: Container(
                   padding: const EdgeInsets.all(12),
+                  clipBehavior: Clip.antiAlias,
                   decoration: const BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
