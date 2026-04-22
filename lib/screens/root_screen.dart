@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'activity_screen.dart';
+import 'diet_plan_screen.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
 import 'scanner_screen.dart';
@@ -35,6 +36,7 @@ class _RootScreenState extends State<RootScreen> {
       hideBottomNav: true,
       onBackToHome: _goToHome,
     ),
+    const DietPlanScreen(hideBottomNav: true),
   ];
 
   @override
@@ -145,6 +147,12 @@ class AppBottomFloatingNav extends StatelessWidget {
             isActive: currentIndex == 3,
             inactiveColor: inactiveColor,
             onTap: () => onTap(3),
+          ),
+          _NavItem(
+            icon: Icons.restaurant_menu_rounded,
+            isActive: currentIndex == 4,
+            inactiveColor: inactiveColor,
+            onTap: () => onTap(4),
           ),
         ],
       ),

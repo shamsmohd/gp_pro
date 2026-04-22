@@ -26,7 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `RootScreen` (authenticated, onboarding complete)
 
 ### Navigation
-`RootScreen` uses an `IndexedStack` with a custom floating bottom nav bar (`AppBottomFloatingNav`). Five tabs: Home, Activity, Scanner, Notifications, Profile.
+`RootScreen` uses an `IndexedStack` with a custom floating bottom nav bar (`AppBottomFloatingNav`). Five tabs: Home, Activity, Scanner, Profile, Diet Plan.
 
 ### Backend (Supabase)
 - **Auth:** Email/password + Google OAuth with PKCE flow. User metadata stores profile fields (`full_name`, `avatar_url`, `dark_mode_enabled`, `onboarding_completed`, etc.).
@@ -37,6 +37,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Key Modules
 - `lib/theme.dart` — `AppColors`, `appTheme`, `darkAppTheme` with Material 3 and Poppins font. Global `appThemeMode` ValueNotifier in `main.dart` drives light/dark switching.
 - `lib/utils_nutrition_calculator.dart` — `NutritionCalculator` computes BMR (Mifflin-St Jeor), TDEE, macros, water intake, and sleep score from user profile data.
+- `lib/utils_diet_plan_generator.dart` — `DietPlanGenerator` produces a daily `DietPlan` from user metadata. Uses a date-seeded shuffle over a tagged food database; filters by chronic disease; distributes calories across meals per the user's `meal_order` preference.
+- `lib/screens/diet_plan_screen.dart` — Diet Plan tab: hero goal banner, macro pills, per-meal food cards with macro tags, a disease/goal-specific tip card, and a "Refresh My Plan" button.
 - `lib/services/local_notification_service.dart` — Singleton wrapping `flutter_local_notifications` for Android/iOS/macOS.
 - `lib/widgets/` — Shared `buttons.dart` and `inputs.dart` used across auth screens.
 
