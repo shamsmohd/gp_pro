@@ -15,17 +15,71 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late Future<HealthData> _healthFuture;
+  HealthData _healthData = HealthData.empty();
+  bool _loading = true;
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
-    _healthFuture = fetchLatestHealthData();
+    _fetchAndSubscribe();
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.userUpdated && mounted) {
         setState(() {});
       }
     });
+  }
+
+  Future<void> _fetchAndSubscribe() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      setState(() => _loading = false);
+      return;
+    }
+
+    // Initial fetch
+    final response = await Supabase.instance.client
+        .from('health_metrics')
+        .select()
+        .eq('user_id', user.id)
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    if (mounted) {
+      setState(() {
+        _healthData = response != null ? HealthData.fromMap(response) : HealthData.empty();
+        _loading = false;
+      });
+    }
+
+    // Realtime subscription — updates UI whenever watch uploads a new row
+    _channel = Supabase.instance.client
+        .channel('home-health-${user.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'health_metrics',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: user.id,
+          ),
+          callback: (payload) {
+            if (mounted) {
+              setState(() {
+                _healthData = HealthData.fromMap(payload.newRecord);
+              });
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    _channel?.unsubscribe();
+    super.dispose();
   }
 
   String _getGreeting() {
@@ -67,28 +121,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return null;
   }
 
-  Future<HealthData> fetchLatestHealthData() async {
-    final user = Supabase.instance.client.auth.currentUser;
-
-    if (user == null) {
-      return HealthData.empty();
-    }
-
-    final response = await Supabase.instance.client
-        .from('health_metrics')
-        .select()
-        .eq('user_id', user.id)
-        .order('created_at', ascending: false)
-        .limit(1)
-        .maybeSingle();
-
-    if (response == null) {
-      return HealthData.empty();
-    }
-
-    return HealthData.fromMap(response);
-  }
-
   @override
   Widget build(BuildContext context) {
     final userName = _getUserFirstName();
@@ -126,17 +158,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         child: SafeArea(
-          child: FutureBuilder<HealthData>(
-            future: _healthFuture,
-            builder: (context, snapshot) {
-              final data = snapshot.data ?? HealthData.empty();
+          child: Builder(
+            builder: (context) {
+              final data = _healthData;
 
               return RefreshIndicator(
                 onRefresh: () async {
-                  setState(() {
-                    _healthFuture = fetchLatestHealthData();
-                  });
-                  await _healthFuture;
+                  await _fetchAndSubscribe();
                 },
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -302,6 +330,43 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       SizedBox(height: 12 * scale),
+                      // Watch vitals row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _VitalCard(
+                              icon: Icons.monitor_heart_rounded,
+                              iconColor: const Color(0xFFE53935),
+                              title: 'Heart Rate',
+                              value: data.heartRate != null
+                                  ? data.heartRate!.toStringAsFixed(0)
+                                  : '—',
+                              unit: 'bpm',
+                              cardColor: cardColor,
+                              cardBorder: cardBorder,
+                              isDark: isDark,
+                              scale: scale,
+                            ),
+                          ),
+                          SizedBox(width: 12 * scale),
+                          Expanded(
+                            child: _VitalCard(
+                              icon: Icons.water_drop_rounded,
+                              iconColor: const Color(0xFF1E88E5),
+                              title: 'SpO2',
+                              value: data.spo2 != null
+                                  ? data.spo2!.toStringAsFixed(1)
+                                  : '—',
+                              unit: '%',
+                              cardColor: cardColor,
+                              cardBorder: cardBorder,
+                              isDark: isDark,
+                              scale: scale,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 12 * scale),
                       Row(
                         children: [
                           Expanded(
@@ -406,32 +471,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         scale: scale,
                       ),
 
-                      // ---- Loading / Error states ----
-                      if (snapshot.connectionState ==
-                              ConnectionState.waiting &&
-                          !snapshot.hasData)
+                      // ---- Loading state ----
+                      if (_loading)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 40),
                           child: Center(child: CircularProgressIndicator()),
-                        ),
-                      if (snapshot.hasError)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 20),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: cardColor,
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: const Text(
-                              'Could not load health data. Pull to refresh.',
-                              style: TextStyle(
-                                color: Colors.redAccent,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
                         ),
                     ],
                   ),
@@ -765,6 +809,10 @@ class HealthData {
   final int calories;
   final double hydration;
   final int sleepHours;
+  // Watch fields
+  final double? heartRate;
+  final double? spo2;
+  final int? steps;
 
   HealthData({
     required this.bloodPressureSys,
@@ -774,6 +822,9 @@ class HealthData {
     required this.calories,
     required this.hydration,
     required this.sleepHours,
+    this.heartRate,
+    this.spo2,
+    this.steps,
   });
 
   factory HealthData.empty() {
@@ -801,6 +852,18 @@ class HealthData {
       return fallback;
     }
 
+    double? readOptionalDouble(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toDouble();
+      return null;
+    }
+
+    int? readOptionalInt(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toInt();
+      return null;
+    }
+
     return HealthData(
       bloodPressureSys: readInt(map['blood_pressure_sys'], 120),
       bloodPressureDia: readInt(map['blood_pressure_dia'], 80),
@@ -809,6 +872,9 @@ class HealthData {
       calories: readInt(map['calories'], 320),
       hydration: readDouble(map['hydration'], 2.5),
       sleepHours: readInt(map['sleep_hours'], 8),
+      heartRate: readOptionalDouble(map['heart_rate']),
+      spo2: readOptionalDouble(map['spo2']),
+      steps: readOptionalInt(map['steps']),
     );
   }
 }

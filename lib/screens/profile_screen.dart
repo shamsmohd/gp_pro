@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gp_pro/screens/settings_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -420,6 +421,120 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showWatchSetupDialog(BuildContext context) {
+    final uuid = _supabase.auth.currentUser?.id ?? 'Not signed in';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    bool copied = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Text('⌚', style: TextStyle(fontSize: 24)),
+              const SizedBox(width: 10),
+              Text(
+                'Connect Watch',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'To pair your health watch:',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '1. Power on the watch\n'
+                '2. Connect your phone to WiFi "Watch-Setup"\n'
+                '3. Open http://192.168.4.1 in your browser\n'
+                '4. Enter your WiFi name, password, and the UUID below',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.6,
+                  color: isDark ? Colors.white60 : Colors.black54,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Your User UUID',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white54 : Colors.black45,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.black.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: Text(
+                  uuid,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: uuid));
+                    setState(() => copied = true);
+                  },
+                  icon: Icon(
+                    copied ? Icons.check : Icons.copy_outlined,
+                    size: 18,
+                    color: copied ? Colors.green : const Color(0xFF6366F1),
+                  ),
+                  label: Text(
+                    copied ? 'Copied!' : 'Copy UUID',
+                    style: TextStyle(
+                      color: copied ? Colors.green : const Color(0xFF6366F1),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _resetPassword() async {
     try {
       final user = _supabase.auth.currentUser;
@@ -714,14 +829,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             const SizedBox(height: 24),
                             _ProfileMenuTile(
                               icon: Icons.watch_outlined,
-                              title: 'Device info',
-                              onTap: () {
-                                _showSimpleDialog(
-                                  title: 'Device info',
-                                  message:
-                                  'You can add your connected health device details here later.',
-                                );
-                              },
+                              title: 'Connect Watch',
+                              onTap: () => _showWatchSetupDialog(context),
                             ),
                             const SizedBox(height: 16),
                             _ProfileMenuTile(
