@@ -371,39 +371,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Expanded(
                             child: _VitalCard(
-                              icon: Icons.favorite_rounded,
-                              iconColor: const Color(0xFFE53935),
-                              title: 'Blood pressure',
-                              value:
-                                  '${data.bloodPressureSys}/${data.bloodPressureDia}',
-                              unit: 'mmHg',
-                              cardColor: cardColor,
-                              cardBorder: cardBorder,
-                              isDark: isDark,
-                              scale: scale,
-                            ),
-                          ),
-                          SizedBox(width: 12 * scale),
-                          Expanded(
-                            child: _VitalCard(
-                              icon: Icons.bloodtype_rounded,
-                              iconColor: const Color(0xFFD32F2F),
-                              title: 'Blood sugar',
-                              value: '${data.bloodSugar}',
-                              unit: 'mg/dl',
-                              cardColor: cardColor,
-                              cardBorder: cardBorder,
-                              isDark: isDark,
-                              scale: scale,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 12 * scale),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _VitalCard(
                               icon: Icons.thermostat_rounded,
                               iconColor: const Color(0xFFFF9800),
                               title: 'Temperature',

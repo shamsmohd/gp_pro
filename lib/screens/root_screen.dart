@@ -32,11 +32,11 @@ class _RootScreenState extends State<RootScreen> {
       hideBottomNav: true,
       onBackToHome: _goToHome,
     ),
+    const DietPlanScreen(hideBottomNav: true),
     ProfileScreen(
       hideBottomNav: true,
       onBackToHome: _goToHome,
     ),
-    const DietPlanScreen(hideBottomNav: true),
   ];
 
   @override
@@ -143,13 +143,13 @@ class AppBottomFloatingNav extends StatelessWidget {
             onTap: () => onTap(2),
           ),
           _NavItem(
-            icon: Icons.person_outline_rounded,
+            icon: Icons.restaurant_menu_rounded,
             isActive: currentIndex == 3,
             inactiveColor: inactiveColor,
             onTap: () => onTap(3),
           ),
           _NavItem(
-            icon: Icons.restaurant_menu_rounded,
+            icon: Icons.person_outline_rounded,
             isActive: currentIndex == 4,
             inactiveColor: inactiveColor,
             onTap: () => onTap(4),

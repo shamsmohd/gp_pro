@@ -535,39 +535,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _resetPassword() async {
-    try {
-      final user = _supabase.auth.currentUser;
-      final email = user?.email;
-
-      if (email == null || email.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No email found for this account')),
-        );
-        return;
-      }
-
-      await _supabase.auth.resetPasswordForEmail(email);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Password reset email sent to $email'),
-        ),
-      );
-    } on AuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Reset password error: $e')),
-      );
-    }
-  }
-
   Future<void> _logout() async {
     try {
       await _supabase.auth.signOut();
@@ -844,12 +811,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 );
                               },
-                            ),
-                            const SizedBox(height: 16),
-                            _ProfileMenuTile(
-                              icon: Icons.lock_reset_outlined,
-                              title: 'Reset password',
-                              onTap: _resetPassword,
                             ),
                             const SizedBox(height: 16),
                             _ProfileMenuTile(
